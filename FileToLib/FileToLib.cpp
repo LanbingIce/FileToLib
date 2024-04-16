@@ -225,9 +225,36 @@ struct ObjSec {
         IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_CNT_CODE     //Characteristics
     };
 
-    string data;
+    struct SectionData {
+        vector<string> dataTable;
 
-    IMAGE_SYMBOL symbolTable1{
+        void Add(const string& data) {
+            dataTable.push_back(data);
+        }
+
+        void Add(DWORD data) {
+            auto p = (char*)&data;
+            dataTable.push_back(string(p, sizeof(DWORD)));
+        }
+
+        DWORD GetSize() const {
+            DWORD size = 0;
+            for (auto& data : dataTable)
+            {
+                size += data.size();
+            }
+            return size;
+        }
+
+        static friend std::ostream& operator<<(std::ostream& os, const SectionData& obj) {
+            for (auto& data : obj.dataTable) {
+                os << data;
+            }
+            return os;
+        }
+    }sectionData;
+
+    IMAGE_SYMBOL symbolTableFlat{
             ".flat",    //N
             0,      //Value
             1,      //SectionNumber
@@ -254,32 +281,47 @@ struct ObjSec {
     0       //NumberOfAuxSymbols
     };
 
-    vector<string> strTable;
+    struct StringTable {
+        vector<string> strTable;
 
-    int stringTableSize() const {
-        int size = 0;
-        for (auto& str : strTable) {
-            size += str.size() + 1;
+        void Add(const string& str) {
+            strTable.push_back(str);
         }
-        return size;
-    }
+
+        DWORD GetSize() const {
+            DWORD size = sizeof(DWORD);
+            for (auto& str : strTable)
+            {
+                size += str.size() + 1;
+            }
+            return size;
+        }
+
+        static friend std::ostream& operator<<(std::ostream& os, const StringTable& obj) {
+            DWORD size = obj.GetSize();
+            os.write((char*)&size, sizeof(size));
+            for (auto& str : obj.strTable) {
+                os << str << '\0';
+            }
+            return os;
+        }
+    }stringTable;
 
     int GetSize() const {
         int size = 0;
-        size += sizeof(IMAGE_FILE_HEADER);
-        size += sizeof(IMAGE_SECTION_HEADER);
-        size += data.size();
-        size += sizeof(data.size());
-        size += sizeof(IMAGE_SYMBOL);
-        size += sizeof(IMAGE_SYMBOL);
-        size += sizeof(IMAGE_SYMBOL);
-        size += sizeof(stringTableSize());
-        size += stringTableSize();
+        size += sizeof(fileHeader);
+        size += sizeof(sectionHeader);
+        size += sectionData.GetSize();
+        size += sizeof(symbolTableFlat);
+        size += sizeof(symbolTableDataName);
+        size += sizeof(symbolTableSizeName);
+        size += stringTable.GetSize();
         return size;
     }
 
     ObjSec(string& data, string& dataName, string& sizeName) {
-        this->data = data;
+        sectionData.Add(data);
+        sectionData.Add(sectionData.GetSize());
         fileHeader.PointerToSymbolTable = sectionHeader.PointerToRawData + data.size() + sizeof(data.size());
         sectionHeader.SizeOfRawData = data.size() + sizeof(data.size());
         if (dataName.size() <= 8)
@@ -289,8 +331,8 @@ struct ObjSec {
         else
         {
             symbolTableDataName.N.Name.Short = 0;
-            symbolTableDataName.N.Name.Long = stringTableSize() + 4;
-            strTable.push_back(dataName);
+            symbolTableDataName.N.Name.Long = stringTable.GetSize();
+            stringTable.Add(dataName);
         }
 
         symbolTableSizeName.Value = data.size();
@@ -302,8 +344,8 @@ struct ObjSec {
         else
         {
             symbolTableSizeName.N.Name.Short = 0;
-            symbolTableSizeName.N.Name.Long = stringTableSize() + 4;
-            strTable.push_back(sizeName);
+            symbolTableSizeName.N.Name.Long = stringTable.GetSize();
+            stringTable.Add(sizeName);
         }
 
     }
@@ -311,17 +353,11 @@ struct ObjSec {
     friend std::ostream& operator<<(std::ostream& os, const ObjSec& obj) {
         os.write((char*)&obj.fileHeader, sizeof(obj.fileHeader));
         os.write((char*)&obj.sectionHeader, sizeof(obj.sectionHeader));
-        os << obj.data;
-        int size = obj.data.size();
-        os.write((char*)&size, sizeof(size));
-        os.write((char*)&obj.symbolTable1, sizeof(obj.symbolTable1));
+        os << obj.sectionData;
+        os.write((char*)&obj.symbolTableFlat, sizeof(obj.symbolTableFlat));
         os.write((char*)&obj.symbolTableDataName, sizeof(obj.symbolTableDataName));
         os.write((char*)&obj.symbolTableSizeName, sizeof(obj.symbolTableSizeName));
-        size = obj.stringTableSize() + 4;
-        os.write((char*)&size, sizeof(size));
-        for (auto& str : obj.strTable) {
-            os << str << '\0';
-        }
+        os << obj.stringTable;
         return os;
     }
 };
@@ -404,7 +440,7 @@ int main(int argc, char* argv[])
 extern "C" size_t size_{filename};
 extern "C" char data_{filename}[];
 )";
-   
+
     cout << utils::ReplaceFilename(str, filename);
     ofs.close();
     std::cin.get();
