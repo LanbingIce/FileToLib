@@ -54,6 +54,12 @@ namespace utils {
     }
 }
 
+struct Data
+{
+    string name;
+    string data;
+};
+
 struct SectionHeader {
     string Name;      // 名称 16
     string Time = std::to_string(TIMESTAMP);      // 时间 12
@@ -226,7 +232,7 @@ struct ObjSec {
         1,//NumberOfSections
         TIMESTAMP,//TimeDateStamp
         sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_SECTION_HEADER),  //PointerToSymbolTable
-        3,//NumberOfSymbols
+        0,//NumberOfSymbols
         0,//SizeOfOptionalHeader
         IMAGE_FILE_32BIT_MACHINE | IMAGE_FILE_LINE_NUMS_STRIPPED //Characteristics
     };
@@ -269,6 +275,7 @@ struct ObjSec {
     }sectionData;
 
     struct SymbolTable {
+        IMAGE_FILE_HEADER* fileHeader;
         StringTable* stringTable;
         vector<IMAGE_SYMBOL> table;
 
@@ -293,6 +300,7 @@ struct ObjSec {
                 stringTable->Add(name);
             }
             table.push_back(symbol);
+            fileHeader->NumberOfSymbols++;
         }
 
         DWORD GetSize() const {
@@ -305,7 +313,7 @@ struct ObjSec {
             }
             return os;
         }
-    }symbolTable{ &stringTable };
+    }symbolTable{ &fileHeader, &stringTable };
 
     struct StringTable {
         vector<string> strTable;
@@ -349,21 +357,19 @@ struct ObjSec {
         fileHeader.PointerToSymbolTable += data.size();
     }
 
-    void AddExternalData(string& name, const string& data) {
+    void AddExternalData(const string& name, const string& data) {
         symbolTable.Add(name, IMAGE_SYM_CLASS_EXTERNAL, sectionData.GetSize());
         AddSectionData(data);
     }
 
-    void AddExternalData(string& name, DWORD data) {
+    void AddExternalData(const string& name, DWORD data) {
         auto p = (char*)&data;
         AddExternalData(name, string(p, sizeof(DWORD)));
     }
 
 
-    ObjSec(string& data, string& dataName, string& sizeName) {
+    ObjSec() {
         symbolTable.Add(".flat", IMAGE_SYM_CLASS_STATIC);
-        AddExternalData(dataName, data);
-        AddExternalData(sizeName, data.size());
     }
 
     static friend std::ostream& operator<<(std::ostream& os, const ObjSec& obj) {
@@ -385,6 +391,8 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    vector<Data> datas;
+
     bool second = true;
 
     std::filesystem::path path(argv[1]);
@@ -392,12 +400,14 @@ int main(int argc, char* argv[])
     auto data = string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     string Signature = "!<arch>\n";
     string filename = utils::ReplaceInvalidCharacters(path.filename().string());
-    string dataName = "_data_" + filename;
-    string sizeName = "_size_" + filename;
+    datas.push_back({ filename,data });
 
     FirstSec firstSec;
-    firstSec.Add(dataName);
-    firstSec.Add(sizeName);
+    for (auto& d : datas)
+    {
+        firstSec.Add("_data_" + d.name);
+        firstSec.Add("_size_" + d.name);
+    }
 
     SectionHeader firstSecHeader;
     firstSecHeader.Name = "/";
@@ -405,8 +415,11 @@ int main(int argc, char* argv[])
 
     SecondSec secondSec;
     secondSec.AddObj();
-    secondSec.AddSymbol(1, dataName);
-    secondSec.AddSymbol(1, sizeName);
+    for (auto& d : datas)
+    {
+        secondSec.AddSymbol(1, "_data_" + d.name);
+        secondSec.AddSymbol(1, "_size_" + d.name);
+    }
 
     SectionHeader secondSecHeader;
     secondSecHeader.Name = "/";
@@ -419,7 +432,12 @@ int main(int argc, char* argv[])
     longnameSecHeader.Name = "//";
     longnameSecHeader.Size = std::to_string(longnameSec.GetSize());
 
-    ObjSec objSec(data, dataName, sizeName);
+    ObjSec objSec;
+    for (auto& d : datas)
+    {
+        objSec.AddExternalData("_data_" + d.name, d.data);
+        objSec.AddExternalData("_size_" + d.name, d.data.size());
+    }
 
     SectionHeader objSecHeader;
     objSecHeader.Name = "/0";
