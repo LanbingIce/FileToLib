@@ -267,7 +267,7 @@ struct ObjSec {
 
             if (name.size() <= 8)
             {
-                strcpy_s((char*)&symbol.N.ShortName, 8, name.c_str());
+                std::memcpy(&symbol.N.ShortName, name.c_str(), name.size());
             }
             else
             {
@@ -330,7 +330,7 @@ struct ObjSec {
         sectionData.Add(data);
         sectionHeader.SizeOfRawData += data.size();
         fileHeader.PointerToSymbolTable += data.size();
-        }
+    }
 
     void AddExternalData(string& name, const string& data) {
         symbolTable.Add(name, IMAGE_SYM_CLASS_EXTERNAL, sectionData.GetSize());
