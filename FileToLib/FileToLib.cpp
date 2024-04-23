@@ -371,6 +371,8 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    bool second = true;
+
     std::filesystem::path path(argv[1]);
     std::ifstream file(path, std::ios::in | std::ios::binary);
     auto data = string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -388,14 +390,15 @@ int main(int argc, char* argv[])
     firstSecHeader.Name = "/";
     firstSecHeader.Size = std::to_string(firstSec.GetSize());
 
-    //SecondSec secondSec;
-    //secondSec.AddObj();
-    //secondSec.AddSymbol(1, dataName);
-    //secondSec.AddSymbol(1, sizeName);
+    SecondSec secondSec;
+    secondSec.AddObj();
+    secondSec.AddSymbol(1, dataName);
+    secondSec.AddSymbol(1, sizeName);
 
-    //SectionHeader secondSecHeader;
-    //secondSecHeader.Name = "/";
-    //secondSecHeader.Size = std::to_string(secondSec.GetSize());
+    SectionHeader secondSecHeader;
+    secondSecHeader.Name = "/";
+    secondSecHeader.Size = std::to_string(secondSec.GetSize());
+
 
     LongnameSec longnameSec;
 
@@ -414,20 +417,26 @@ int main(int argc, char* argv[])
     offset += Signature.size();
     offset += firstSecHeader.GetSize();
     offset += firstSec.GetSize();
-    //offset += secondSecHeader.GetSize();
-    //offset += secondSec.GetSize();
+    if (second)
+    {
+        offset += secondSecHeader.GetSize();
+        offset += secondSec.GetSize();
+    }
     offset += longnameSecHeader.GetSize();
     offset += longnameSec.GetSize();
 
     firstSec.SymbolOffset[0] = offset;
     firstSec.SymbolOffset[1] = offset;
-    //secondSec.ObjOffset[0] = offset;
+    secondSec.ObjOffset[0] = offset;
 
     path.replace_filename(path.stem().string() + ".lib");
     std::ofstream ofs(path, std::ios::binary);
     ofs << Signature;
     ofs << firstSecHeader << firstSec;
-    // ofs << secondSecHeader << secondSec;
+    if (second)
+    {
+        ofs << secondSecHeader << secondSec;
+    }
     ofs << longnameSecHeader << longnameSec;
     ofs << objSecHeader << objSec;
 
