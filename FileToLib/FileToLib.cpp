@@ -71,7 +71,7 @@ struct SectionHeader {
         return 16 + 12 + 6 + 6 + 8 + 10 + 2;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const SectionHeader& obj) {
+    static friend std::ostream& operator<<(std::ostream& os, const SectionHeader& obj) {
         os << pad(obj.Name, 16);
         os << pad(obj.Time, 12);
         os << pad(obj.UserID, 6);
@@ -109,7 +109,7 @@ struct FirstSec {
         return size;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const FirstSec& obj) {
+    static friend std::ostream& operator<<(std::ostream& os, const FirstSec& obj) {
         auto temp = utils::convert(obj.SymbolNum);
         os.write((char*)&temp, sizeof(temp));
         for (auto& offset : obj.SymbolOffset) {
@@ -160,7 +160,7 @@ struct SecondSec {
         return size;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const SecondSec& obj) {
+    static friend std::ostream& operator<<(std::ostream& os, const SecondSec& obj) {
         os.write((char*)&obj.ObjNum, sizeof(obj.ObjNum));
 
         for (auto& offset : obj.ObjOffset) {
@@ -193,7 +193,7 @@ struct LongnameSec {
         return size;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const LongnameSec& obj) {
+    static friend std::ostream& operator<<(std::ostream& os, const LongnameSec& obj) {
         for (auto& str : obj.StrTable) {
             os << str << '\0';
         }
@@ -350,7 +350,7 @@ struct ObjSec {
 
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const ObjSec& obj) {
+    static friend std::ostream& operator<<(std::ostream& os, const ObjSec& obj) {
         os.write((char*)&obj.fileHeader, sizeof(obj.fileHeader));
         os.write((char*)&obj.sectionHeader, sizeof(obj.sectionHeader));
         os << obj.sectionData;
