@@ -111,6 +111,13 @@ struct FirstSec {
         return size;
     }
 
+    void SetSymbolOffset(DWORD offset) {
+        for (auto& o : SymbolOffset)
+        {
+            o = offset;
+        }
+    }
+
     static friend std::ostream& operator<<(std::ostream& os, const FirstSec& obj) {
         auto temp = utils::convert(obj.SymbolNum);
         os.write((char*)&temp, sizeof(temp));
@@ -139,6 +146,14 @@ struct SecondSec {
         SymbolIdx.push_back(index);
         StrTable.push_back(str);
         SymbolNum++;
+    }
+
+
+    void SetObjOffset(DWORD offset) {
+        for (auto& o : ObjOffset)
+        {
+            o = offset;
+        }
     }
 
     int GetSize() const {
@@ -423,9 +438,8 @@ int main(int argc, char* argv[])
     offset += longnameSecHeader.GetSize();
     offset += longnameSec.GetSize();
 
-    firstSec.SymbolOffset[0] = offset;
-    firstSec.SymbolOffset[1] = offset;
-    secondSec.ObjOffset[0] = offset;
+    firstSec.SetSymbolOffset(offset);
+    secondSec.SetObjOffset(offset);
 
     path.replace_filename(filename + ".lib");
     std::ofstream ofs(path, std::ios::binary);
