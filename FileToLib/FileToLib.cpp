@@ -202,11 +202,13 @@ struct LongnameSec {
 };
 
 struct ObjSec {
+    struct StringTable; //前向声明
+
     IMAGE_FILE_HEADER fileHeader{
         IMAGE_FILE_MACHINE_I386,//Machine
         1,//NumberOfSections
         utils::GetCurrentTimestamp(),//TimeDateStamp
-        0,  //PointerToSymbolTable
+        sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_SECTION_HEADER),  //PointerToSymbolTable
         3,//NumberOfSymbols
         0,//SizeOfOptionalHeader
         IMAGE_FILE_32BIT_MACHINE | IMAGE_FILE_LINE_NUMS_STRIPPED //Characteristics
@@ -232,11 +234,6 @@ struct ObjSec {
             dataTable.push_back(data);
         }
 
-        void Add(DWORD data) {
-            auto p = (char*)&data;
-            dataTable.push_back(string(p, sizeof(DWORD)));
-        }
-
         DWORD GetSize() const {
             DWORD size = 0;
             for (auto& data : dataTable)
@@ -254,32 +251,44 @@ struct ObjSec {
         }
     }sectionData;
 
-    IMAGE_SYMBOL symbolTableFlat{
-            ".flat",    //N
-            0,      //Value
-            1,      //SectionNumber
-            IMAGE_SYM_TYPE_NULL,        //Type
-            IMAGE_SYM_CLASS_STATIC,     //StorageClass
-            0       //NumberOfAuxSymbols
-    };
+    struct SymbolTable {
+        StringTable* stringTable;
+        vector<IMAGE_SYMBOL> table;
 
-    IMAGE_SYMBOL symbolTableDataName{
-        "",    //N
-        0,      //Value
-        1,      //SectionNumber
-        IMAGE_SYM_TYPE_NULL,        //Type
-        IMAGE_SYM_CLASS_EXTERNAL,     //StorageClass
-        0       //NumberOfAuxSymbols
-    };
+        void Add(const string& name, BYTE StorageClass, DWORD Value = 0) {
+            IMAGE_SYMBOL symbol{
+                "",    //N
+                Value,      //Value
+                1,      //SectionNumber
+                IMAGE_SYM_TYPE_NULL,        //Type
+                StorageClass,     //StorageClass
+                0       //NumberOfAuxSymbols
+            };
 
-    IMAGE_SYMBOL symbolTableSizeName{
-    "",    //N
-    0,      //Value
-    1,      //SectionNumber
-    IMAGE_SYM_TYPE_NULL,        //Type
-    IMAGE_SYM_CLASS_EXTERNAL,     //StorageClass
-    0       //NumberOfAuxSymbols
-    };
+            if (name.size() <= 8)
+            {
+                strcpy_s((char*)&symbol.N.ShortName, 8, name.c_str());
+            }
+            else
+            {
+                symbol.N.Name.Short = 0;
+                symbol.N.Name.Long = stringTable->GetSize();
+                stringTable->Add(name);
+            }
+            table.push_back(symbol);
+        }
+
+        DWORD GetSize() const {
+            return sizeof(IMAGE_SYMBOL) * table.size();
+        }
+
+        static friend std::ostream& operator<<(std::ostream& os, const SymbolTable& obj) {
+            for (auto& symbol : obj.table) {
+                os.write((char*)&symbol, sizeof(symbol));
+            }
+            return os;
+        }
+    }symbolTable{ &stringTable };
 
     struct StringTable {
         vector<string> strTable;
@@ -312,51 +321,39 @@ struct ObjSec {
         size += sizeof(fileHeader);
         size += sizeof(sectionHeader);
         size += sectionData.GetSize();
-        size += sizeof(symbolTableFlat);
-        size += sizeof(symbolTableDataName);
-        size += sizeof(symbolTableSizeName);
+        size += symbolTable.GetSize();
         size += stringTable.GetSize();
         return size;
     }
 
-    ObjSec(string& data, string& dataName, string& sizeName) {
+    void AddSectionData(const string& data) {
         sectionData.Add(data);
-        sectionData.Add(sectionData.GetSize());
-        fileHeader.PointerToSymbolTable = sectionHeader.PointerToRawData + data.size() + sizeof(data.size());
-        sectionHeader.SizeOfRawData = data.size() + sizeof(data.size());
-        if (dataName.size() <= 8)
-        {
-            strcpy_s((char*)&symbolTableDataName.N.ShortName, 8, dataName.c_str());
-        }
-        else
-        {
-            symbolTableDataName.N.Name.Short = 0;
-            symbolTableDataName.N.Name.Long = stringTable.GetSize();
-            stringTable.Add(dataName);
+        sectionHeader.SizeOfRawData += data.size();
+        fileHeader.PointerToSymbolTable += data.size();
         }
 
-        symbolTableSizeName.Value = data.size();
+    void AddExternalData(string& name, const string& data) {
+        symbolTable.Add(name, IMAGE_SYM_CLASS_EXTERNAL, sectionData.GetSize());
+        AddSectionData(data);
+    }
 
-        if (sizeName.size() <= 8)
-        {
-            strcpy_s((char*)&symbolTableSizeName.N.ShortName, 8, sizeName.c_str());
-        }
-        else
-        {
-            symbolTableSizeName.N.Name.Short = 0;
-            symbolTableSizeName.N.Name.Long = stringTable.GetSize();
-            stringTable.Add(sizeName);
-        }
+    void AddExternalData(string& name, DWORD data) {
+        auto p = (char*)&data;
+        AddExternalData(name, string(p, sizeof(DWORD)));
+    }
 
+
+    ObjSec(string& data, string& dataName, string& sizeName) {
+        symbolTable.Add(".flat", IMAGE_SYM_CLASS_STATIC);
+        AddExternalData(dataName, data);
+        AddExternalData(sizeName, data.size());
     }
 
     static friend std::ostream& operator<<(std::ostream& os, const ObjSec& obj) {
         os.write((char*)&obj.fileHeader, sizeof(obj.fileHeader));
         os.write((char*)&obj.sectionHeader, sizeof(obj.sectionHeader));
         os << obj.sectionData;
-        os.write((char*)&obj.symbolTableFlat, sizeof(obj.symbolTableFlat));
-        os.write((char*)&obj.symbolTableDataName, sizeof(obj.symbolTableDataName));
-        os.write((char*)&obj.symbolTableSizeName, sizeof(obj.symbolTableSizeName));
+        os << obj.symbolTable;
         os << obj.stringTable;
         return os;
     }
