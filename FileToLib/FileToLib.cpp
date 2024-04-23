@@ -374,8 +374,7 @@ int main(int argc, char* argv[])
     std::ifstream file(path, std::ios::in | std::ios::binary);
     auto data = string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     string Signature = "!<arch>\n";
-    string filename = path.stem().string();
-    filename = utils::ReplaceInvalidCharacters(filename);
+    string filename = utils::ReplaceInvalidCharacters(path.filename().string());
     string dataName = "_data_" + filename;
     string sizeName = "_size_" + filename;
 
@@ -426,7 +425,7 @@ int main(int argc, char* argv[])
     firstSec.SymbolOffset[1] = offset;
     secondSec.ObjOffset[0] = offset;
 
-    path.replace_filename(path.stem().string() + ".lib");
+    path.replace_filename(filename + ".lib");
     std::ofstream ofs(path, std::ios::binary);
     ofs << Signature;
     ofs << firstSecHeader << firstSec;
