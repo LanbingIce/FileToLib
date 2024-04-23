@@ -12,6 +12,8 @@ using std::string;
 using std::vector;
 using std::cout;
 
+#define TIMESTAMP utils::GetCurrentTimestamp()
+
 namespace utils {
     template<typename T>
     static T convert(T v) {
@@ -54,7 +56,7 @@ namespace utils {
 
 struct SectionHeader {
     string Name;      // 名称 16
-    string Time = std::to_string(utils::GetCurrentTimestamp());      // 时间 12
+    string Time = std::to_string(TIMESTAMP);      // 时间 12
     string UserID = "";     // 用户ID  6
     string GroupID = "";    // 组ID   6
     string Mode = "0";       // 模式    8
@@ -207,7 +209,7 @@ struct ObjSec {
     IMAGE_FILE_HEADER fileHeader{
         IMAGE_FILE_MACHINE_I386,//Machine
         1,//NumberOfSections
-        utils::GetCurrentTimestamp(),//TimeDateStamp
+        TIMESTAMP,//TimeDateStamp
         sizeof(IMAGE_FILE_HEADER) + sizeof(IMAGE_SECTION_HEADER),  //PointerToSymbolTable
         3,//NumberOfSymbols
         0,//SizeOfOptionalHeader
